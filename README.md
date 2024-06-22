@@ -5,7 +5,7 @@ The CafeRec application recommends nearby cafes to users based on their location
 Create a virtual environment and navigate to the repo's root directory. Then run the command:
 
 ```bash
-pip install ./requirements.txt
+pip install -r ./requirements.txt
 ```
 
 to install all needed dependencies for the project.
