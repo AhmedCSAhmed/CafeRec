@@ -7,7 +7,85 @@ from fastapi import FastAPI
 import sqlalchemy as sa
 from sqlalchemy import *
 import requests as re
+import hashlib as hs
 app = FastAPI()
+from geopy.geocoders import Nominatim
+from geopy.exc import GeocoderServiceError, GeocoderTimedOut
+
+
+
+
+
+
+
+# Create a Nominatim object
+
+"""
+Converts the user's ZIP code to 
+their corresponding latitude and longitude coordinates.
+"""
+
+def zip_Converter(zipCode:int):
+    try:
+        geolocator = Nominatim(user_agent="CafeApp")
+        location = geolocator.geocode({"postalcode": str(zipCode), "country": "USA"})
+        
+        if location: # if 
+            return [(location.latitude, location.longitude), zipCode]
+        else:
+            print("Location not found.")
+            return None
+    except GeocoderTimedOut:
+        print("Geocoding Timed Out")
+        return None
+    except GeocoderServiceError:
+        print("Service Error")
+        return None
+        
+ 
+print(zip_Converter(55124))
+
+
+
+"""
+Given the exact Lat and Longitude 
+return a Unique Cafe ID 
+Caribou Cafe --> "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+"""
+def uniqueID(lat:float, long:float):
+    h = hs.sha256()
+    loc = lat + long
+    h.update(loc)
+    key = h.hexdigest()
+    return key 
+
+
+    
+
+# Print the coordinates
+# print(location.latitude, location.longitude) 
+
+
+
+
+# Cafe informatio
+
+class Cafe:
+    cafe_id: int # Key make unique hashFucntion
+    cafe_name: str
+    zipcode: int
+    stars: int
+    vibe: str
+    
+    
+class Vibe(Enum):
+    QUIET=1,
+    SOCIAL=2,
+    ETHNIC=3,
+    TASTE=4,
+
+    
+    
 
 '''
 Setting up the DB as an in-memory database using sqlite
@@ -37,10 +115,9 @@ with engine.connect() as conn:
         stars=5,
         reviews="Great coffee, friendly staff, and a nice place to study."
     ) # sample data that we play around with 
-    
 
-# Cafe information
 
+        
 
 # Entry method to server, use to start application
 @app.get("/")
