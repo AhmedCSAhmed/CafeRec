@@ -9,3 +9,10 @@ pip install -r ./requirements.txt
 ```
 
 to install all needed dependencies for the project.
+
+To ensure that the most updated set of dependencies are present in the ``` requirements.txt ``` file, 
+run the following command in the root project folder before pushing any code to the GitHub repository:
+
+```bash
+pip freeze ./requirements.txt
+```
