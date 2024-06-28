@@ -11,8 +11,7 @@ import sqlalchemy
 from fastapi import FastAPI
 from geopy.exc import GeocoderServiceError, GeocoderTimedOut
 from geopy.geocoders import Nominatim
-from nltk.corpus import wordnet
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import *
 
 
 class Cafe:
@@ -36,10 +35,10 @@ class Vibe(Enum):
     good for study, and peaceful" would most strongly match to the QUIET vibe.
     """
 
-    QUIET = (1,)
-    TALKATIVE = (2,)
-    ETHNIC = (3,)
-    TASTY = (4,)
+    QUIET = 1
+    TALKATIVE = 2
+    ETHNIC = 3
+    TASTY = 4
     AESTHETIC = 5
 
 
@@ -85,30 +84,6 @@ def unique_id(lat: float, long: float) -> str:
     return key
 
 
-def parse_vibes(reviews: list[str]) -> dict[Vibe, int]:
-    """
-    Given a list of review strings for a cafe, match the cafe to each Vibe and
-    assign an integer score communicating how strongly the cafe matches to the Vibe.
-    Higher scores mean stronger matches, and the minimum score is 0.
-    """
-
-    # Match vibes to the cafe by counting the synonyms of the vibe that appear in the reviews
-    vibe_counts: dict[Vibe, int] = {}
-
-    for vibe in Vibe:
-        vibe_counts[vibe] = 0
-        synonyms: list[str] = []
-
-        for synset in wordnet.synsets(vibe.name):  # gather all adjective of the vibe
-            for lemma in synset.lemmas():
-                synonyms.append(lemma.name())
-
-        # search for the synonyms' appearances in the reviews
-        for review in reviews:
-            for synonym in synonyms:
-                vibe_counts[vibe] += review.count(synonym)
-
-    return vibe_counts
 
 
 # Script to setup the database using SQLite (in memory for now)
@@ -136,6 +111,25 @@ with engine.connect() as conn:
     ins = CafeTable.insert().values(
         cafe_name="Caribou Coffee", zipcode=12345, stars=5, vibe=Vibe.AESTHETIC
     )
+    conn.execute(ins)
+
+
+
+
+def get_top_five_cafes(zip : int, vibe : Vibe):
+    '''
+    Given a location and specific vibe, return the 5 highest rated coffee spots that match that vibe and locoation
+    Returns 5 Coffee spots from the database
+    '''
+    #Gets the 5 highest rated coffee spots from the database, checks for same vibe and location
+    query = CafeTable.select().where(
+        CafeTable.c.zipcode == zip, CafeTable.c.vibe == vibe).order_by(desc(
+            CafeTable.c.stars)).limit(5) #gives a limit of 5
+    
+    with engine.connect() as conn:
+        result = conn.execute(query)
+    
+    return result.fetchall() # return top 5 
 
 # FastAPI Server definition
 app = FastAPI()
@@ -148,7 +142,7 @@ def read_root():
     pass
 
 
-# Retrieve the top Cafes matching the requested vibe keywords
+#Retrieve the top Cafes matching the requested vibe keywords
 @app.get("/cafes")
 def get_cafes(num: str, zip_code: int, vibes: list[Vibe]):
     # TODO: Implement, likely using other python files for modularity
