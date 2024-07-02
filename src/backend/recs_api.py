@@ -11,7 +11,7 @@ import sqlalchemy
 from fastapi import FastAPI
 from geopy.exc import GeocoderServiceError, GeocoderTimedOut
 from geopy.geocoders import Nominatim
-from sqlalchemy import *
+from sqlalchemy import Column, String, Integer
 
 
 class Cafe:
