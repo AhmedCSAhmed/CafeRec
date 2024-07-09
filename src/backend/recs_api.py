@@ -9,12 +9,20 @@ from enum import Enum
 
 import sqlalchemy
 from fastapi import FastAPI
-from geopy.exc import GeocoderServiceError, GeocoderTimedOut
+from pydantic import BaseModel
+import requests as requests
+import hashlib as hashlib
+import struct
+from enum import Enum
+
+import sqlalchemy
+from sqlalchemy import Column, Integer, String, desc
+
+app = FastAPI()
 from geopy.geocoders import Nominatim
-from sqlalchemy import *
+from geopy.exc import GeocoderServiceError, GeocoderTimedOut
 
-
-class Cafe:
+class Cafe(BaseModel):
     """
     The schema for the database storing cafe data is defined by this simple Cafe class,
     where each cafe has a unique ID, a name, a zipcode location, a 0-5 star review, and a
@@ -36,9 +44,9 @@ class Vibe(Enum):
     """
 
     QUIET = 1
-    TALKATIVE = 2
+    SOCIAL = 2
     ETHNIC = 3
-    TASTY = 4
+    TASTE = 4
     AESTHETIC = 5
 
 
@@ -65,51 +73,94 @@ def zip_to_coord(zipcode: int) -> tuple[float, float] | None:
     except GeocoderServiceError:
         print("Geocoder Service Error")
         return None
-
-
-def unique_id(lat: float, long: float) -> str:
-    """
-    Given the exact latitude and longitude, return a unique Cafe ID string via hashing.
-    Returns the hash ID as a string.
-    """
-    # initialize hash function
-    hash_func = hashlib.sha256()
+        
+# Given the exact latitude and longitude, return a unique Cafe ID string via hashing. 
+# Example: Caribou Cafe's location maps to "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+def uniqueID(lat: float, long: float) -> str:
 
     # generate hash function seed from location data
-    location_buffer = struct.pack(str(lat + long))
-
+    location_buffer = str(lat + long)
+    encoded_str = location_buffer.encode("utf-8")
     # perform hashing
-    hash_func.update(location_buffer)
-    key = hash_func.hexdigest()
-    return key
+    hash = hashlib.sha256()
+    key = hash.hexdigest()
+    return key 
 
 
+def MakeDB():
+    """
+    This function creates a database table for cafes, with columns for the cafe_id, cafe_name, zipcode, stars, and vibe.
+    cafe_id: a unique identifier for each cafe, created by hashing it's location
+    cafe_name: name of the cafe
+    zipcode: zipcode location of the cafe
+    stars: Google Reviews rating of the cafe
+    vibe: the Vibe enum that the cafe matches strongest to
+    
+    This function creates the table in memory for now.
+    """
+
+    # we will need to move the database to it's own file later
+    engine = sqlalchemy.create_engine("sqlite:///:memory:")
+    if not engine:
+        raise Exception("Could not create engine")
+    engine.connect()
+    metadata = sqlalchemy.MetaData()
+    CafeTable = sqlalchemy.Table(
+        "cafe",
+        metadata,
+        Column("cafe_id", String, primary_key=True),  # primary key for unique identifiers
+        Column("cafe_name", String, nullable=False),
+        Column("zipcode", Integer, nullable=False),  # zipcode of the cafe
+        Column("stars", Integer, nullable=False),  
+        Column("vibe", Integer, nullable=False) # vibe that the cafe matches strongest to
+    )
+     
+
+    metadata.create_all(engine)
+    return engine, CafeTable
+
+# Create the database
+try:
+    engine, CafeTable = MakeDB()
+    print("Database created successfully")
+except RuntimeError as e:
+    print(f"Error creating database: {e}")
 
 
-# Script to setup the database using SQLite (in memory for now)
+"""
+This function takes in a Cafe object and inserts it into the database.
+The Cafe object is a representation of a cafe with a name, zipcode, star rating, and vibe.
+The function inserts the cafe into the database table, with the cafe_id being a unique hash of the cafe's location.
+"""
+def putEntriesToDB(entry:Cafe) -> None:
+    coordinates = zip_to_coord(entry.zipcode)
+    if coordinates is None:
+        # Error, handle here
+        raise Exception("unable to convert to coordinates")
+    
+    latitude, longitude = coordinates
 
-# Create database engine and table schema
-engine = sqlalchemy.create_engine("sqlite:///:memory:")
-connection = engine.connect()
-metadata = sqlalchemy.MetaData()
-CafeTable = sqlalchemy.Table(
-    "cafe",
-    metadata,
-    # primary key for unique identifiers
-    Column("cafe_id", String, primary_key=True),
-    Column("cafe_name", String, nullable=False),
-    Column("zipcode", Integer, nullable=False),  # zipcode of the cafe
-    Column("stars", Integer, nullable=False),
-    # vibe that the cafe matches strongest to
-    Column("vibe", sqlalchemy.Enum, nullable=False),
-)
+    uqID = uniqueID(latitude, longitude)
+    
+    newCafe = CafeTable.insert().values(
+        cafe_id = uqID,
+        cafe_name = entry.cafe_name,
+        zipcode = entry.zipcode,
+        stars = entry.stars,
+        vibe = entry.vibe
+    )
+    with engine.connect() as conn:
+        conn.execute(newCafe)
 
-metadata.create_all(engine)
+        
 
 # test database by inserting the made-up Caribou Coffee cafe
 with engine.connect() as conn:
     ins = CafeTable.insert().values(
-        cafe_name="Caribou Coffee", zipcode=12345, stars=5, vibe=Vibe.AESTHETIC
+        cafe_name="Caribou Coffee",
+        zipcode=12345,
+        stars=5,
+        vibe=Vibe.SOCIAL
     )
     conn.execute(ins)
 
@@ -148,3 +199,18 @@ def get_cafes(num: str, zip_code: int, vibes: list[Vibe]):
     # TODO: Implement, likely using other python files for modularity
     pass
 
+
+
+
+cafe = Cafe(cafe_id="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", cafe_name="Caribou Coffee", zipcode="12345", stars=5, vibe=Vibe.ETHNIC)
+putEntriesToDB(cafe)
+print("Cafe added to database")
+
+def printCafe(cafe):
+    print("Cafe ID:", cafe.cafe_id)
+    print("Cafe Name:", cafe.cafe_name)
+    print("Zipcode:", cafe.zipcode)
+    print("Stars:", cafe.stars)
+    print("Vibe:", cafe.vibe)
+    print()  # Add a newline for better readability between entries
+printCafe(cafe)
